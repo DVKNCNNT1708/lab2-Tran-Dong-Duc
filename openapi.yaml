@@ -1,0 +1,706 @@
+openapi: 3.1.0
+info:
+  title: Smart Campus Analytics API
+  version: 1.0.0
+  description: |
+    OpenAPI contract cho Analytics Service của Smart Campus.
+    Hợp đồng này bao phủ health check, ingest event, summary KPI, dashboard, login và report detail.
+  contact:
+    name: FIT4110 Teaching Team
+    email: fit4110@example.edu.vn
+servers:
+  - url: http://localhost:4010
+    description: Prism mock server
+tags:
+  - name: health
+    description: Trạng thái service
+  - name: ingest
+    description: Nhận event đầu vào cho analytics
+  - name: analytics
+    description: KPI và dashboard
+  - name: auth
+    description: Xác thực người dùng
+  - name: reports
+    description: Báo cáo chi tiết
+security:
+  - bearerAuth: []
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      summary: Kiểm tra trạng thái service
+      description: Trả về trạng thái hoạt động của Analytics Service.
+      tags:
+        - health
+      security: []
+      responses:
+        '200':
+          description: Service đang hoạt động
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auth/login:
+    post:
+      operationId: login
+      summary: Đăng nhập người dùng
+      description: Xác thực user để lấy token truy cập các endpoint còn lại.
+      tags:
+        - auth
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Đăng nhập thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /ingest:
+    post:
+      operationId: ingestEvent
+      summary: Nhận event đầu vào
+      description: Nhận event từ các service upstream để tổng hợp số liệu analytics.
+      tags:
+        - ingest
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IngestEvent'
+      responses:
+        '202':
+          description: Event đã được chấp nhận để xử lý bất đồng bộ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IngestAccepted'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /analytics/summary:
+    get:
+      operationId: getAnalyticsSummary
+      summary: Lấy KPI tổng hợp
+      description: Trả về số liệu tổng hợp theo khoảng thời gian yêu cầu.
+      tags:
+        - analytics
+      parameters:
+        - $ref: '#/components/parameters/FromDate'
+        - $ref: '#/components/parameters/ToDate'
+        - $ref: '#/components/parameters/Granularity'
+      responses:
+        '200':
+          description: KPI tổng hợp
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyticsSummary'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /dashboard:
+    get:
+      operationId: getDashboard
+      summary: Lấy dữ liệu dashboard
+      description: Trả về dữ liệu phục vụ màn hình dashboard vận hành.
+      tags:
+        - analytics
+      parameters:
+        - $ref: '#/components/parameters/Period'
+      responses:
+        '200':
+          description: Dữ liệu dashboard
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /reports/{id}:
+    get:
+      operationId: getReportById
+      summary: Lấy báo cáo theo id
+      description: Trả về báo cáo chi tiết cho một kỳ tổng hợp cụ thể.
+      tags:
+        - reports
+      parameters:
+        - $ref: '#/components/parameters/ReportId'
+      responses:
+        '200':
+          description: Báo cáo chi tiết
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    ReportId:
+      name: id
+      in: path
+      required: true
+      description: UUID của report.
+      schema:
+        type: string
+        format: uuid
+    FromDate:
+      name: fromDate
+      in: query
+      required: true
+      description: Ngày bắt đầu của khoảng tổng hợp.
+      schema:
+        type: string
+        format: date
+    ToDate:
+      name: toDate
+      in: query
+      required: true
+      description: Ngày kết thúc của khoảng tổng hợp.
+      schema:
+        type: string
+        format: date
+    Granularity:
+      name: granularity
+      in: query
+      required: false
+      description: Mức tổng hợp dữ liệu.
+      schema:
+        type: string
+        enum:
+          - hour
+          - day
+          - week
+        default: day
+    Period:
+      name: period
+      in: query
+      required: false
+      description: Khoảng dashboard cần hiển thị.
+      schema:
+        type: string
+        enum:
+          - today
+          - week
+          - month
+        default: today
+
+  responses:
+    BadRequest:
+      description: Request không hợp lệ
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Unauthorized:
+      description: Chưa xác thực
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Forbidden:
+      description: Không đủ quyền
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    NotFound:
+      description: Không tìm thấy resource
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    UnprocessableEntity:
+      description: Dữ liệu đúng JSON nhưng sai rule nghiệp vụ
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    InternalServerError:
+      description: Lỗi hệ thống
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+
+  schemas:
+    HealthStatus:
+      type: object
+      additionalProperties: false
+      required:
+        - status
+        - service
+        - time
+      properties:
+        status:
+          type: string
+          enum:
+            - ok
+        service:
+          type: string
+          minLength: 2
+          maxLength: 80
+        time:
+          type: string
+          format: date-time
+
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 100
+        password:
+          type: string
+          minLength: 8
+          maxLength: 128
+
+    AuthenticatedUser:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - username
+        - role
+      properties:
+        id:
+          type: string
+          format: uuid
+        username:
+          type: string
+          minLength: 3
+          maxLength: 100
+        role:
+          type: string
+          enum:
+            - admin
+            - analyst
+
+    LoginResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - accessToken
+        - tokenType
+        - expiresInSeconds
+        - user
+      properties:
+        accessToken:
+          type: string
+          minLength: 20
+        tokenType:
+          type: string
+          enum:
+            - Bearer
+        expiresInSeconds:
+          type: integer
+          minimum: 60
+        user:
+          $ref: '#/components/schemas/AuthenticatedUser'
+
+    IngestEvent:
+      oneOf:
+        - $ref: '#/components/schemas/AccessIngestEvent'
+        - $ref: '#/components/schemas/IotIngestEvent'
+      discriminator:
+        propertyName: sourceType
+        mapping:
+          access: '#/components/schemas/AccessIngestEvent'
+          iot: '#/components/schemas/IotIngestEvent'
+
+    AccessIngestEvent:
+      type: object
+      additionalProperties: false
+      required:
+        - sourceType
+        - eventId
+        - gateId
+        - cardId
+        - direction
+        - decision
+        - occurredAt
+      properties:
+        sourceType:
+          type: string
+          const: access
+        eventId:
+          type: string
+          format: uuid
+        gateId:
+          type: string
+          pattern: '^GATE-[0-9]{2}$'
+        cardId:
+          type: string
+          minLength: 4
+          maxLength: 64
+        direction:
+          type: string
+          enum:
+            - IN
+            - OUT
+        decision:
+          type: string
+          enum:
+            - ALLOW
+            - DENY
+        occurredAt:
+          type: string
+          format: date-time
+        correlationId:
+          type:
+            - string
+            - 'null'
+          format: uuid
+
+    IotIngestEvent:
+      type: object
+      additionalProperties: false
+      required:
+        - sourceType
+        - eventId
+        - deviceId
+        - metric
+        - value
+        - unit
+        - occurredAt
+      properties:
+        sourceType:
+          type: string
+          const: iot
+        eventId:
+          type: string
+          format: uuid
+        deviceId:
+          type: string
+          pattern: '^DEVICE-[A-Z0-9-]{3,32}$'
+        metric:
+          type: string
+          enum:
+            - temperature
+            - humidity
+            - motion
+            - occupancy
+            - power
+        value:
+          type: number
+        unit:
+          type: string
+          minLength: 1
+          maxLength: 20
+        zoneId:
+          type:
+            - string
+            - 'null'
+          minLength: 1
+          maxLength: 50
+        occurredAt:
+          type: string
+          format: date-time
+        correlationId:
+          type:
+            - string
+            - 'null'
+          format: uuid
+
+    IngestAccepted:
+      type: object
+      additionalProperties: false
+      required:
+        - eventId
+        - status
+        - acceptedAt
+      properties:
+        eventId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+            - ACCEPTED
+        acceptedAt:
+          type: string
+          format: date-time
+        queuePosition:
+          type:
+            - integer
+            - 'null'
+          minimum: 1
+
+    AnalyticsSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - fromDate
+        - toDate
+        - granularity
+        - totalEvents
+        - totalAlerts
+        - denyRate
+        - generatedAt
+      properties:
+        fromDate:
+          type: string
+          format: date
+        toDate:
+          type: string
+          format: date
+        granularity:
+          type: string
+          enum:
+            - hour
+            - day
+            - week
+        totalEvents:
+          type: integer
+          minimum: 0
+        totalAlerts:
+          type: integer
+          minimum: 0
+        denyRate:
+          type: number
+          minimum: 0
+          maximum: 1
+        topMetric:
+          type:
+            - string
+            - 'null'
+          minLength: 1
+          maxLength: 80
+        generatedAt:
+          type: string
+          format: date-time
+
+    DashboardResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - period
+        - generatedAt
+        - cards
+      properties:
+        period:
+          type: string
+          enum:
+            - today
+            - week
+            - month
+        generatedAt:
+          type: string
+          format: date-time
+        cards:
+          type: array
+          minItems: 1
+          maxItems: 24
+          items:
+            $ref: '#/components/schemas/DashboardCard'
+        note:
+          type:
+            - string
+            - 'null'
+          maxLength: 200
+
+    DashboardCard:
+      type: object
+      additionalProperties: false
+      required:
+        - key
+        - label
+        - value
+        - unit
+      properties:
+        key:
+          type: string
+          minLength: 2
+          maxLength: 50
+        label:
+          type: string
+          minLength: 2
+          maxLength: 100
+        value:
+          type: number
+        unit:
+          type: string
+          minLength: 0
+          maxLength: 20
+        trend:
+          type:
+            - string
+            - 'null'
+          enum:
+            - up
+            - down
+            - flat
+            - null
+
+    Report:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - title
+        - status
+        - periodStart
+        - periodEnd
+        - generatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+          minLength: 3
+          maxLength: 120
+        description:
+          type:
+            - string
+            - 'null'
+          maxLength: 500
+        status:
+          type: string
+          enum:
+            - READY
+            - PROCESSING
+            - FAILED
+        periodStart:
+          type: string
+          format: date-time
+        periodEnd:
+          type: string
+          format: date-time
+        generatedAt:
+          type: string
+          format: date-time
+        downloadUrl:
+          type:
+            - string
+            - 'null'
+          format: uri
+        sections:
+          type: array
+          minItems: 0
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/ReportSection'
+
+    ReportSection:
+      type: object
+      additionalProperties: false
+      required:
+        - title
+        - items
+      properties:
+        title:
+          type: string
+          minLength: 2
+          maxLength: 100
+        items:
+          type: array
+          minItems: 0
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/ReportItem'
+
+    ReportItem:
+      type: object
+      additionalProperties: false
+      required:
+        - label
+        - value
+      properties:
+        label:
+          type: string
+          minLength: 1
+          maxLength: 100
+        value:
+          type:
+            - string
+            - number
+            - boolean
+            - 'null'
+
+    Problem:
+      type: object
+      additionalProperties: false
+      required:
+        - type
+        - title
+        - status
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+          minLength: 1
+        status:
+          type: integer
+          minimum: 100
+          maximum: 599
+        detail:
+          type:
+            - string
+            - 'null'
+        instance:
+          type:
+            - string
+            - 'null'
+          format: uri-reference
+        traceId:
+          type:
+            - string
+            - 'null'
+          minLength: 1
