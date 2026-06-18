@@ -584,7 +584,6 @@ components:
             - up
             - down
             - flat
-            - null
 
     Report:
       type: object
